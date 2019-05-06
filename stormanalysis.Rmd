@@ -1,0 +1,104 @@
+---
+title: "An analysis of the economic and human cost of weather events from 1950 onward"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+## Synopsis
+
+In this analysis we examine a data set documenting storm weather events since 1950. The events include several different phenomena such as tornadoes, hail, ect. The data set documents many details for each event such as location and duration. In this analysis we load the dataset into R, remove any non complete cases and extract the fatalities, injuries and economic damage with respect to each event. We then find the the top 10 events the fatalities, injuries and economic damage, and present these findings in tables and bar charts.
+
+## Data Processing 
+
+First we read the table into R:
+
+```{r, cache=TRUE}
+strmdata<-read.csv("repdata_data_StormData.csv.bz2")
+names(strmdata)
+```
+&nbsp;  
+Upon examining the data variables we can see that many of the variables are superfluous to what we need so we will remove all variables except "EVTPE", "FATALITIES", "INJURIES", "PROPDMD". "PROPDMGEXP", "CROPDMG" and ""CROPDMG"". This is seen in the following code, we also remove any incomplete cases.
+&nbsp;  
+
+```{r, cache=TRUE}
+workdata<-strmdata[,c("EVTYPE","FATALITIES","INJURIES" ,"PROPDMG","PROPDMGEXP","CROPDMG","CROPDMGEXP")]
+workdata<-na.omit(workdata)
+```
+<br>
+The cost of damages is also attributed to a given event, each value is
+quantified in the  "PROPDMGEXP" column, to further process the data we will instead use this column and the "PROPDMG" and create a new column with the numerical values of cost of the damage. If we apply table to "PROPDMGEXP" we see there are other values than "K" (thousands), "M" (million), and "B" billions. Compared to "K, "M" , and "B" we see the other values are not very frequent and they are not explained in the other documents, thus we will just set these values to 1 ( so that the value in "PROPDMG" represents just that value, as opposed to a multiple of a thousand ect.). We also convert "K", "M" and "B" to their numerical equivalents such that "PROPDMG" can be multiplied by these values to get the actual value of damage. This is achieved by the following code:  
+
+
+
+```{r, cache=TRUE}
+table(workdata$"PROPDMGEXP")
+temp<-as.character(workdata$"PROPDMGEXP")
+temp[!(temp=="K"|temp=="M"|temp=="B")]<-1
+temp[temp=="K"]<-1000
+temp[temp=="M"]<-1000000
+temp[temp=="B"]<-1000000000
+temp<-as.numeric(temp)
+ACTCOST<-workdata$"PROPDMG"*temp
+workdata<-mutate(workdata,PROPDMGNUM=ACTCOST)
+# Now do the same for crop damage
+temp<-as.character(workdata$"CROPDMGEXP")
+temp[!(temp=="K"|temp=="M"|temp=="B")]<-1
+temp[temp=="K"]<-1000
+temp[temp=="M"]<-1000000
+temp[temp=="B"]<-1000000000
+temp<-as.numeric(temp)
+ACTCOST<-workdata$"CROPDMG"*temp
+workdata<-mutate(workdata,CROPDMGNUM=ACTCOST)
+```
+
+
+We can now use workdata as our data set to determine the cost of various storm disasters
+
+## Results
+
+### Storm Events and Public Health
+
+When presenting the data we will consider a fatality worse than an injury regardless of quantity (i.e even one fatality is worse than many injuries. To find the total fatalities and injuries for a given disaster we use the following code:
+
+```{r}
+fat_inj<-workdata[,c("EVTYPE","FATALITIES","INJURIES")]
+event_group<-group_by(fat_inj,EVTYPE)
+sums<-summarize_all(event_group,sum)
+sums<-arrange(sums,desc(FATALITIES))
+sums1<-arrange(sums,desc(INJURIES))
+par(mar=c(8, 4, 4, 2) + 0.1)
+print(sums)
+print(sums1)
+barplot(sums[[2]][1:10],names.arg =sums[[1]][1:10],las=2, col="red",ylab="Total number of fatalities on record", main = "Events leading to the highest numer of fatalities")
+text(x=7, y=4000,labels = "The total fatalities on record given \n for the events with the top 10 fatalities" )
+
+```
+
+There are almost a thousand events so we show the the top 10 events for both total fatalities and injuries in descending order, we also show a bar graph for the number of fatalities. We see that both lists are quite similar (which makes sense as fatalities and injuries are probably correlated). We also see that tornadoes are a significantly higher source of fatalities and injuries compared to other events. 
+
+### Storm Events and Economic Damage
+
+Now we will look at the events that cause the most economic damage, the economic damage is calculated as the sum of the property damage and the crop damage.
+
+```{r}
+dmg<-workdata[,c("EVTYPE","PROPDMGNUM","CROPDMGNUM")]
+dmg<-mutate(dmg,TOTALDMG= PROPDMGNUM + CROPDMGNUM )
+event_group<-group_by(dmg,EVTYPE)
+sums<-summarize_all(event_group,sum)
+sums<-arrange(sums,desc(TOTALDMG))
+par(mar=c(13, 8, 4, 2) + 0.1)
+print(sums)
+barplot(sums[[2]][1:10],names.arg =sums[[1]][1:10],las=2, col="red",ylab="Total economic damage", main = "Events leading to the highest highest cost of damage",mgp = c(5,1,0))
+text(x=7, y=8.0e10,labels = "The total economic damgage on record given \n for the events with the top 10 highest damage" )
+```
+
+Again since there are so many events, we only show the top 10 events in terms of damaged caused. We see from the table and barchart , that floods and hurricanes have caused the most significant amount of economic damage on record, with floods having double the amount of economic damage compared to hurricanes, the cause of the 2nd highest economic damage. 
+
+
+
+
